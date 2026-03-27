@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Простое Flask-приложение для демонстрации CI/CD
-"""
+
 from flask import Flask, jsonify
 import os
 import socket
