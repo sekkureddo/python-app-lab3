@@ -9,8 +9,7 @@ pipeline {
 
     environment {
         DOCKER_REGISTRY = 'docker.io'
-        // Замените 'yourdockerhub' на ваш логин в Docker Hub
-        DOCKER_IMAGE = "yourdockerhub/student-app:${BUILD_NUMBER}"
+        DOCKER_IMAGE = "sekkureddo/student-app:${BUILD_NUMBER}"
         CONTAINER_NAME = "student-app-${params.ENVIRONMENT}"
     }
 
@@ -20,7 +19,7 @@ pipeline {
                 echo "Клонирование репозитория..."
                 // Используем учетные данные с ID 'github-credentials'
                 git branch: 'main', 
-                    url: 'https://github.com/yourusername/simple-python-app.git', 
+                    url: 'https://github.com/sekkureddo/python-app-lab3.git', 
                     credentialsId: 'github-credentials'
             }
         }
@@ -109,7 +108,7 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'github-credentials', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
                         sh "git tag -a v${BUILD_NUMBER}-${params.PRODUCTION_VERSION} -m 'Release v${BUILD_NUMBER}'"
-                        sh "git push https://${GIT_USER}:${GIT_PASS}@github.com/yourusername/simple-python-app.git --tags"
+                        sh "git push https://${GIT_USER}:${GIT_PASS}@github.com/sekkureddo/python-app-lab3.git --tags"
                     }
                 }
             }
@@ -140,7 +139,7 @@ pipeline {
         failure {
             // 4. Отправка уведомлений по Email
             emailext(
-                to: 'admin@example.com',
+                to: 'reddosekaru@mail.ru',
                 subject: "Ошибка в Pipeline: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
                 body: "Сборка №${env.BUILD_NUMBER} завершилась ошибкой. Подробности: ${env.BUILD_URL}",
                 attachLog: true
