@@ -1,0 +1,154 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'STUDENT_NAME', defaultValue: 'Иванов Иван', description: 'ФИО студента')
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Среда')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Запускать тесты')
+    }
+
+    environment {
+        DOCKER_REGISTRY = 'docker.io'
+        // Замените 'yourdockerhub' на ваш логин в Docker Hub
+        DOCKER_IMAGE = "yourdockerhub/student-app:${BUILD_NUMBER}"
+        CONTAINER_NAME = "student-app-${params.ENVIRONMENT}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Клонирование репозитория..."
+                // Используем учетные данные с ID 'github-credentials'
+                git branch: 'main', 
+                    url: 'https://github.com/yourusername/simple-python-app.git', 
+                    credentialsId: 'github-credentials'
+            }
+        }
+
+        stage('Tests') {
+            when {
+                expression { params.RUN_TESTS }
+            }
+            stages {
+                stage('Unit Tests') {
+                    steps {
+                        echo "Запуск Unit-тестов..."
+                        sh 'python3 -m unittest test_app.py -v'
+                    }
+                }
+                stage('Integration Tests') {
+                    steps {
+                        echo "Запуск интеграционных тестов..."
+                        // Здесь может быть команда для других тестов
+                        sh 'echo "Интеграционные тесты пройдены"'
+                    }
+                }
+            }
+        }
+
+        stage('Build and Push') {
+            stages {
+                stage('Build Docker Image') {
+                    steps {
+                        script {
+                            echo "Сборка образа: ${DOCKER_IMAGE}"
+                            docker.build("${DOCKER_IMAGE}")
+                        }
+                    }
+                }
+                stage('Push to Registry') {
+                    steps {
+                        script {
+                            // Используем учетные данные с ID 'docker-hub-credentials'
+                            docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-hub-credentials') {
+                                docker.image("${DOCKER_IMAGE}").push()
+                                docker.image("${DOCKER_IMAGE}").push('latest')
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Dev') {
+            when {
+                expression { params.ENVIRONMENT == 'dev' }
+            }
+            steps {
+                echo "Развертывание в DEV среду..."
+                sh "docker rm -f ${CONTAINER_NAME} || true"
+                sh "docker run -d --name ${CONTAINER_NAME} -p 8081:5000 ${DOCKER_IMAGE}"
+            }
+        }
+
+        stage('Deploy to Staging') {
+            when {
+                expression { params.ENVIRONMENT == 'staging' }
+            }
+            steps {
+                echo "Развертывание в STAGING среду..."
+                sh "docker rm -f ${CONTAINER_NAME} || true"
+                sh "docker run -d --name ${CONTAINER_NAME} -p 8082:5000 ${DOCKER_IMAGE}"
+            }
+        }
+
+        stage('Approve Production') {
+            when {
+                expression { params.ENVIRONMENT == 'production' }
+            }
+            input {
+                message "Подтвердите развертывание в PRODUCTION?"
+                ok "Да, развернуть"
+                parameters {
+                    string(name: 'PRODUCTION_VERSION', defaultValue: 'latest', description: 'Версия для тега')
+                }
+            }
+            steps {
+                echo "Развертывание в PRODUCTION одобрено пользователем"
+                // 3. Тегирование версий (создаем Git-тег)
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'github-credentials', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+                        sh "git tag -a v${BUILD_NUMBER}-${params.PRODUCTION_VERSION} -m 'Release v${BUILD_NUMBER}'"
+                        sh "git push https://${GIT_USER}:${GIT_PASS}@github.com/yourusername/simple-python-app.git --tags"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Production') {
+            when {
+                expression { params.ENVIRONMENT == 'production' }
+            }
+            steps {
+                script {
+                    echo "Развертывание в PRODUCTION (порт 80)..."
+                    sh "docker rm -f ${CONTAINER_NAME} || true"
+                    sh "docker pull ${DOCKER_IMAGE}"
+                    sh "docker run -d --name ${CONTAINER_NAME} -p 80:5000 ${DOCKER_IMAGE}"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                // 4. Отправка уведомлений (пример лога)
+                echo "Pipeline успешно выполнен для среды: ${params.ENVIRONMENT}"
+            }
+        }
+        failure {
+            // 4. Отправка уведомлений по Email
+            emailext(
+                to: 'admin@example.com',
+                subject: "Ошибка в Pipeline: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
+                body: "Сборка №${env.BUILD_NUMBER} завершилась ошибкой. Подробности: ${env.BUILD_URL}",
+                attachLog: true
+            )
+        }
+        always {
+            echo "Очистка рабочего пространства..."
+            cleanWs()
+        }
+    }
+}
