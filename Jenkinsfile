@@ -74,8 +74,9 @@ pipeline {
                         script {
                             // Используем учетные данные с ID 'docker-hub-credentials'
                             docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-hub-credentials') {
-                                docker.image("${DOCKER_IMAGE}").push()
-                                docker.image("${DOCKER_IMAGE}").push('latest')
+                              def myImage = docker.image("sekkureddo/student-app:${env.BUILD_NUMBER}")
+                              myImage.push()
+                              myImage.push('latest')
                             }
                         }
                     }
