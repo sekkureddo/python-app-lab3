@@ -17,10 +17,21 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo "Клонирование репозитория..."
-                // Используем учетные данные с ID 'github-credentials'
                 git branch: 'main', 
                     url: 'https://github.com/sekkureddo/python-app-lab3.git', 
                     credentialsId: 'github-credentials'
+            }
+        }
+
+        stage('Setup Python') {
+            steps {
+                echo 'Настройка окружения Python...'
+                sh '''
+                python3 -m venv venv
+                . venv/bin/activate
+                pip install --upgrade pip
+                pip install -r requirements.txt
+                '''
             }
         }
 
@@ -31,8 +42,11 @@ pipeline {
             stages {
                 stage('Unit Tests') {
                     steps {
-                        echo "Запуск Unit-тестов..."
-                        sh 'python3 -m unittest test_app.py -v'
+                        echo "Настройка окружения и запуск тестов..."
+                        sh '''
+                        . venv/bin/activate
+                        python3 -m unittest test_app.py -v
+                        '''
                     }
                 }
                 stage('Integration Tests') {
@@ -76,7 +90,14 @@ pipeline {
             steps {
                 echo "Развертывание в DEV среду..."
                 sh "docker rm -f ${CONTAINER_NAME} || true"
-                sh "docker run -d --name ${CONTAINER_NAME} -p 8081:5000 ${DOCKER_IMAGE}"
+                sh """
+                  docker run -d \
+                   --name ${CONTAINER_NAME} \
+                   -p 8081:5000 \
+                   -e STUDENT_NAME='${params.STUDENT_NAME}' \
+                   -e PORT=5000 \
+                   ${DOCKER_IMAGE}
+                """
             }
         }
 
@@ -87,7 +108,14 @@ pipeline {
             steps {
                 echo "Развертывание в STAGING среду..."
                 sh "docker rm -f ${CONTAINER_NAME} || true"
-                sh "docker run -d --name ${CONTAINER_NAME} -p 8082:5000 ${DOCKER_IMAGE}"
+                sh """
+                  docker run -d \
+                   --name ${CONTAINER_NAME} \
+                   -p 8082:5000 \
+                   -e STUDENT_NAME='${params.STUDENT_NAME}' \
+                   -e PORT=5000 \
+                   ${DOCKER_IMAGE}
+                """
             }
         }
 
@@ -123,7 +151,14 @@ pipeline {
                     echo "Развертывание в PRODUCTION (порт 80)..."
                     sh "docker rm -f ${CONTAINER_NAME} || true"
                     sh "docker pull ${DOCKER_IMAGE}"
-                    sh "docker run -d --name ${CONTAINER_NAME} -p 80:5000 ${DOCKER_IMAGE}"
+                    sh """
+                  docker run -d \
+                   --name ${CONTAINER_NAME} \
+                   -p 80:5000 \
+                   -e STUDENT_NAME='${params.STUDENT_NAME}' \
+                   -e PORT=5000 \
+                   ${DOCKER_IMAGE}
+                """
                 }
             }
         }
@@ -132,12 +167,10 @@ pipeline {
     post {
         success {
             script {
-                // 4. Отправка уведомлений (пример лога)
                 echo "Pipeline успешно выполнен для среды: ${params.ENVIRONMENT}"
             }
         }
         failure {
-            // 4. Отправка уведомлений по Email
             emailext(
                 to: 'reddosekaru@mail.ru',
                 subject: "Ошибка в Pipeline: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
