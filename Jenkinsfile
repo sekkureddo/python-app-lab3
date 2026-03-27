@@ -8,7 +8,7 @@ pipeline {
     }
 
     environment {
-        DOCKER_REGISTRY = 'docker.io'
+        DOCKER_REGISTRY = 'index.docker.io/v1/'
         DOCKER_IMAGE = "sekkureddo/student-app:${BUILD_NUMBER}"
         CONTAINER_NAME = "student-app-${params.ENVIRONMENT}"
     }
